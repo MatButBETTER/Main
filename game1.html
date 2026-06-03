@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Low Poly bk game</title>
+  <title>BK Multiplayer Fixed</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -28,123 +28,121 @@ import RAPIER from "https://cdn.skypack.dev/@dimforge/rapier3d-compat";
 
 await RAPIER.init();
 
-/* ---------------- WORLD ---------------- */
-const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+/* ================= NETWORK ================= */
 
-/* ---------------- NETWORK ---------------- */
 const ws = new WebSocket("wss://rectal-ascent-grove.ngrok-free.dev");
 
 let myId = null;
-const remotePlayers = {};
+let myName = prompt("Enter your name") || "Player"; // ✅ FIXED
 
-/* ---------------- SCENE ---------------- */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9bb4c7);
-const name = prompt("Enter your name") || "Guest";
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "name",
+    name: myName
+  }));
+};
 
-/* 🌫️ FOG BACK */
-scene.fog = new THREE.Fog(0x9bb4c7, 5, 60);
+/* ================= INPUT ================= */
 
-/* LIGHTS */
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-
-const sun = new THREE.DirectionalLight(0xffffff, 1);
-sun.position.set(5, 10, 5);
-scene.add(sun);
-
-/* ---------------- CAMERA ---------------- */
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
-camera.rotation.order = "YXZ";
-
-/* ---------------- RENDERER ---------------- */
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-/* ---------------- INPUT ---------------- */
 const keys = {};
-window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
 let yaw = 0;
 let pitch = 0;
 
-/* ---------------- PLAYER ---------------- */
+/* ================= THREE ================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87a8c4);
+scene.fog = new THREE.Fog(0x87a8c4, 5, 120);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(10, 20, 10);
+scene.add(sun);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+camera.rotation.order = "YXZ";
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* ================= PHYSICS ================= */
+
+const world = new RAPIER.World({ x:0, y:-9.81, z:0 });
+
+/* PLAYER SPAWN FIX */
 const playerBody = world.createRigidBody(
   RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 2, 0)
 );
 
 world.createCollider(
-  RAPIER.ColliderDesc.capsule(0.5, 1.0),
+  RAPIER.ColliderDesc.capsule(0.5, 1),
   playerBody
 );
 
-/* ---------------- WORLD ---------------- */
-function addBox(x, y, z, sx, sy, sz, color) {
+/* ================= MAP (FULL RESTORE) ================= */
+
+function box(x,y,z,sx,sy,sz,color){
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(sx*2, sy*2, sz*2),
     new THREE.MeshStandardMaterial({ color })
   );
 
-  mesh.position.set(x, y, z);
+  mesh.position.set(x,y,z);
   scene.add(mesh);
 
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(sx, sy, sz).setTranslation(x, y, z)
+    RAPIER.ColliderDesc.cuboid(sx,sy,sz).setTranslation(x,y,z)
   );
 }
 
-/* ===================== YOUR MAP RESTORED ===================== */
-
-addBox(0, -1, 0, 100, 0.5, 100, 0x9e982b);
+/* FLOOR */
+box(0,-1,0,100,0.5,100,0x9e982b);
 
 const wallcolour = 0xede321;
 
 /* OUTER WALLS */
-addBox(100, 0, 0, 0.5, 4, 100, wallcolour);
-addBox(0, 0, 100, 100, 4, 0.5, wallcolour);
-addBox(-100, 0, 0, 0.5, 4, 100, wallcolour);
-addBox(0, 0, -100, 100, 4, 0.5, wallcolour);
+box(100,0,0,0.5,4,100,wallcolour);
+box(-100,0,0,0.5,4,100,wallcolour);
+box(0,0,100,100,4,0.5,wallcolour);
+box(0,0,-100,100,4,0.5,wallcolour);
 
-/* INNER WALLS */
-addBox(0, 0, -10, 10, 4, 0.5, wallcolour);
-addBox(0, 0, 10, 15, 4, 0.5, wallcolour);
-addBox(10, 0, 0, 0.5, 4, 10, wallcolour);
-addBox(-20, 0, 0, 5, 4, 0.5, wallcolour);
-addBox(-20, 0, 0, 0.5, 4, 5, wallcolour);
-addBox(10, 0, 15, 20, 4, 0.5, wallcolour);
-addBox(20, 0, 0, 0.5, 4, 10, wallcolour);
-addBox(0, 0, -18, 10, 4, 0.5, wallcolour);
-addBox(-15, 0, -10, 8, 4, 0.5, wallcolour);
-addBox(20, 0, -30, 20, 4, 0.5, wallcolour);
-addBox(20, 0, -30, 0.5, 4, 10, wallcolour);
-addBox(-20, 0, -30, 10, 4, 0.5, wallcolour);
-addBox(-20, 0, -30, 0.5, 4, 10, wallcolour);
-addBox(-25, 0, 30, 0.5, 4, 10, wallcolour);
-addBox(-25, 0, 40, 10, 4, 0.5, wallcolour);
-addBox(-40, 0, 30, 0.5, 4, 20, wallcolour);
-addBox(-40, 0, 30, 10, 4, 0.5, wallcolour);
-addBox(-20, 0, 20, 0.5, 4, 0.5, wallcolour);
-addBox(-40, 0, 0, 0.5, 4, 0.5, wallcolour);
-addBox(-45, 0, 0, 0.5, 4, 5, wallcolour);
-addBox(-45, 0, -15, 5, 4, 0.5, wallcolour);
-addBox(-45, 0, -20, 10, 4, 0.5, wallcolour);
-addBox(-58, 0, -10, 0.5, 4, 10, wallcolour);
-addBox(-58, 0, 15, 0.5, 4, 10, wallcolour);
+/* INNER STRUCTURE (YOUR CHAOTIC BEAUTY RESTORED) */
+box(0,0,-10,10,4,0.5,wallcolour);
+box(0,0,10,15,4,0.5,wallcolour);
+box(10,0,0,0.5,4,10,wallcolour);
+box(-20,0,0,5,4,0.5,wallcolour);
+box(-20,0,0,0.5,4,5,wallcolour);
+box(10,0,15,20,4,0.5,wallcolour);
+box(20,0,0,0.5,4,10,wallcolour);
+box(0,0,-18,10,4,0.5,wallcolour);
+box(-15,0,-10,8,4,0.5,wallcolour);
+box(20,0,-30,20,4,0.5,wallcolour);
+box(20,0,-30,0.5,4,10,wallcolour);
+box(-20,0,-30,10,4,0.5,wallcolour);
+box(-20,0,-30,0.5,4,10,wallcolour);
+box(-25,0,30,0.5,4,10,wallcolour);
+box(-25,0,40,10,4,0.5,wallcolour);
+box(-40,0,30,0.5,4,20,wallcolour);
+box(-40,0,30,10,4,0.5,wallcolour);
+box(-45,0,0,0.5,4,5,wallcolour);
+box(-45,0,-15,5,4,0.5,wallcolour);
+box(-45,0,-20,10,4,0.5,wallcolour);
+box(-58,0,-10,0.5,4,10,wallcolour);
+box(-58,0,15,0.5,4,10,wallcolour);
 
 /* ROOF */
-addBox(0, 4, 0, 100, 1, 100, 0x8f8f8f);
+box(0,4,0,100,1,100,0x8f8f8f);
 
-/* ============================================================= */
+/* ================= REMOTES ================= */
 
-/* ---------------- REMOTES ---------------- */
-function createRemotePlayer(id) {
+const remote = {};
 
+function createRemote(id){
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
     new THREE.MeshStandardMaterial({ color: 0xffcc00 })
@@ -156,58 +154,62 @@ function createRemotePlayer(id) {
   canvas.height = 128;
 
   const ctx = canvas.getContext("2d");
-  const texture = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(canvas);
 
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: texture, transparent: true })
+    new THREE.SpriteMaterial({ map: tex, transparent: true })
   );
 
-  sprite.scale.set(3, 1.5, 1);
+  sprite.scale.set(4,2,1);
   scene.add(sprite);
 
   return {
     mesh,
     sprite,
-    canvas,
     ctx,
-    texture,
+    tex,
     target: new THREE.Vector3(),
-    name: "Player " + id.slice(0,4)
+    tag: "Player"
   };
 }
 
-/* ---------------- NETWORK ---------------- */
+/* ================= NETWORK ================= */
+
 ws.onmessage = (msg) => {
   const data = JSON.parse(msg.data);
 
-  if (data.type === "id") myId = data.id;
+  if (data.type === "id") {
+    myId = data.id;
+  }
 
   if (data.type === "state") {
-
     const p = data.players;
-
-    for (const id in remotePlayers) {
-      if (!p[id]) {
-        scene.remove(remotePlayers[id].mesh);
-        scene.remove(remotePlayers[id].sprite);
-        delete remotePlayers[id];
-      }
-    }
 
     for (const id in p) {
       if (id === myId) continue;
 
-      if (!remotePlayers[id]) {
-        remotePlayers[id] = createRemotePlayer(id);
+      if (!remote[id]) {
+        remote[id] = createRemote(id);
       }
 
-      remotePlayers[id].target.set(p[id].x, p[id].y, p[id].z);
+      remote[id].target.set(p[id].x, p[id].y, p[id].z);
+      remote[id].tag = p[id].name;
+    }
+
+    // cleanup dead players
+    for (const id in remote) {
+      if (!p[id]) {
+        scene.remove(remote[id].mesh);
+        scene.remove(remote[id].sprite);
+        delete remote[id];
+      }
     }
   }
 };
 
-/* ---------------- SEND ---------------- */
-function sendPosition() {
+/* ================= SEND ================= */
+
+function send(){
   if (ws.readyState !== 1) return;
 
   const t = playerBody.translation();
@@ -220,20 +222,14 @@ function sendPosition() {
   }));
 }
 
-ws.send(JSON.stringify({
-  type: "tag",
-  tag: playerTag
-}));
+/* ================= LOOP ================= */
 
-/* ---------------- LOOP ---------------- */
-function animate() {
+function animate(){
   requestAnimationFrame(animate);
 
   world.step();
 
-  const pos = playerBody.translation();
-  const vel = playerBody.linvel();
-
+  /* LOOK */
   const lookSpeed = 0.02;
 
   if (keys["arrowleft"]) yaw += lookSpeed;
@@ -242,11 +238,13 @@ function animate() {
   if (keys["arrowdown"]) pitch -= lookSpeed;
 
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
-
   camera.rotation.set(pitch, yaw, 0);
 
-  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+  /* MOVE */
+  const vel = playerBody.linvel();
+
+  const forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
+  const right = new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
 
   let vx = 0, vz = 0;
 
@@ -261,12 +259,15 @@ function animate() {
     playerBody.setLinvel({ x: vel.x, y: 6, z: vel.z }, true);
   }
 
+  const pos = playerBody.translation();
   camera.position.set(pos.x, pos.y + 0.8, pos.z);
 
-  sendPosition();
+  send();
 
-  for (const id in remotePlayers) {
-    const p = remotePlayers[id];
+  /* ================= NAMETAGS ================= */
+
+  for (const id in remote) {
+    const p = remote[id];
 
     p.mesh.position.lerp(p.target, 0.25);
 
@@ -276,17 +277,21 @@ function animate() {
       p.mesh.position.z
     );
 
-    /* nametag draw */
-    p.ctx.clearRect(0, 0, 256, 128);
-    p.ctx.fillStyle = "white";
-    p.ctx.font = "bold 40px Arial";
-    p.ctx.textAlign = "center";
-    p.ctx.fillText(p.name, 128, 64);
+    const ctx = p.ctx;
+    ctx.clearRect(0,0,256,128);
 
-    p.texture.needsUpdate = true;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(20,20,216,70);
+
+    ctx.fillStyle = "white";
+    ctx.font = "bold 32px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(p.tag || "Player", 128, 65);
+
+    p.tex.needsUpdate = true;
   }
 
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
 animate();
