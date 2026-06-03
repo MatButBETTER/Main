@@ -85,7 +85,7 @@ world.createCollider(
   playerBody
 );
 
-/* ---------------- WORLD (YOUR MAP EXACTLY) ---------------- */
+/* ---------------- WORLD ---------------- */
 
 const meshes = [];
 
@@ -117,7 +117,7 @@ function addLight(type = "ambient", x, y, z) {
   }
 }
 
-/* ---------------- YOUR WORLD (UNCHANGED) ---------------- */
+/* ---------------- WORLD (UNCHANGED) ---------------- */
 
 addBox(0, -1, 0, 100, 0.5, 100, 0x9e982b);
 
@@ -163,16 +163,38 @@ addBox(0, 4, 0, 100, 1, 100, 0x8f8f8f);
 
 /* ---------------- REMOTE PLAYERS ---------------- */
 
-function createRemotePlayer() {
+function createRemotePlayer(id) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1, 2, 1),
     new THREE.MeshStandardMaterial({ color: 0xffcc00 })
   );
+
   scene.add(mesh);
+
+  // create label
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = 256;
+  canvas.height = 128;
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: texture, transparent: true })
+  );
+
+  sprite.scale.set(2, 1, 1);
+  scene.add(sprite);
 
   return {
     mesh,
-    target: new THREE.Vector3()
+    sprite,
+    canvas,
+    ctx,
+    texture,
+    target: new THREE.Vector3(),
+    name: `Player ${id.slice(0, 4)}`
   };
 }
 
@@ -193,7 +215,7 @@ ws.onmessage = (msg) => {
       if (id === myId) continue;
 
       if (!remotePlayers[id]) {
-        remotePlayers[id] = createRemotePlayer();
+        remotePlayers[id] = createRemotePlayer(id);
       }
 
       remotePlayers[id].target.set(
@@ -298,10 +320,26 @@ function animate() {
   /* SMOOTH REMOTE PLAYERS */
   for (const id in remotePlayers) {
     const p = remotePlayers[id];
-    p.mesh.position.lerp(p.target, 0.25);
-  }
 
-  renderer.render(scene, camera);
+    // smooth movement
+    p.mesh.position.lerp(p.target, 0.25);
+
+  // follow head
+    p.sprite.position.set(
+      p.mesh.position.x,
+      p.mesh.position.y + 1.5,
+      p.mesh.position.z
+    );
+
+  // draw text
+    p.ctx.clearRect(0, 0, 256, 128);
+    p.ctx.fillStyle = "white";
+    p.ctx.font = "bold 40px Arial";
+    p.ctx.textAlign = "center";
+    p.ctx.fillText(p.name, 128, 64);
+
+    p.texture.needsUpdate = true;
+  }
 }
 
 animate();
