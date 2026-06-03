@@ -33,7 +33,7 @@ await RAPIER.init();
 const ws = new WebSocket("wss://rectal-ascent-grove.ngrok-free.dev");
 
 let myId = null;
-let myName = prompt("Enter your name") || "Player"; // ✅ FIXED
+let myName = prompt("Enter your name") || "Player";
 
 ws.onopen = () => {
   ws.send(JSON.stringify({
@@ -51,11 +51,29 @@ addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 let yaw = 0;
 let pitch = 0;
 
+/* WAYPOINT CREATE KEY */
+addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "h") {
+    const name = prompt("name this waypoint");
+    if (!name) return;
+
+    const t = playerBody.translation();
+
+    ws.send(JSON.stringify({
+      type: "waypoint",
+      x: t.x,
+      y: t.y,
+      z: t.z,
+      name
+    }));
+  }
+});
+
 /* ================= THREE ================= */
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87a8c4);
-scene.fog = new THREE.Fog(0x87a8c4, 5, 100);
+scene.fog = new THREE.Fog(0x87a8c4, 5, 120);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 
@@ -72,9 +90,8 @@ document.body.appendChild(renderer.domElement);
 
 /* ================= PHYSICS ================= */
 
-const world = new RAPIER.World({ x:0, y:-9.81, z:0 });
+const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 
-/* PLAYER SPAWN FIX */
 const playerBody = world.createRigidBody(
   RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 2, 0)
 );
@@ -84,7 +101,7 @@ world.createCollider(
   playerBody
 );
 
-/* ================= MAP (FULL RESTORE) ================= */
+/* ================= MAP (UNCHANGED) ================= */
 
 function box(x,y,z,sx,sy,sz,color){
   const mesh = new THREE.Mesh(
@@ -109,8 +126,6 @@ const CHUNK = 70;
 
 function buildChunk(offX, offZ) {
 
-
-  /* INNER STRUCTURE */
   box(0 + offX, 0, -10 + offZ, 10, 4, 0.5, wallcolour);
   box(0 + offX, 0, 10 + offZ, 15, 4, 0.5, wallcolour);
   box(10 + offX, 0, 0 + offZ, 0.5, 4, 10, wallcolour);
@@ -140,15 +155,12 @@ function buildChunk(offX, offZ) {
   box(10 + offX, 0, 15 + offZ, 5, 4, 0.5, wallcolour);
   box(10 + offX, 0, 30 + offZ, 0.5, 4, 10, wallcolour);
   box(30 + offX, 0, 50 + offZ, 0.5, 4, 10, wallcolour);
-  box(30 + offX, 0, 25 + offZ, 0.5, 4, 0.5, wallcolour);
   box(30 + offX, 0, 0 + offZ, 10, 4, 0.5, wallcolour);
   box(30 + offX, 0, -40 + offZ, 10, 4, 0.5, wallcolour);
   box(-40 + offX, 0, -40 + offZ, 0.5, 4, 8, wallcolour);
-
- 
 }
 
-const RANGE = 5; // how many chunks in each direction
+const RANGE = 5;
 
 for (let x = -RANGE; x <= RANGE; x++) {
   for (let z = -RANGE; z <= RANGE; z++) {
@@ -156,15 +168,13 @@ for (let x = -RANGE; x <= RANGE; x++) {
   }
 }
 
-/* ROOF AND FLOOOOOOR*/
-  box(0,4,0,1000,1,1000,0x8f8f8f);
-  //box(0,-1,0,1000,1,1000,0x8f964b);
+box(0,4,0,1000,1,1000,0x8f8f8f);
 
 /* ================= REMOTES ================= */
 
 const remote = {};
 
-function createRemote(id){
+function createRemote(){
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
     new THREE.MeshStandardMaterial({ color: 0xffcc00 })
@@ -179,7 +189,11 @@ function createRemote(id){
   const tex = new THREE.CanvasTexture(canvas);
 
   const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true })
+    new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false
+    })
   );
 
   sprite.scale.set(4,2,1);
@@ -191,8 +205,45 @@ function createRemote(id){
     ctx,
     tex,
     target: new THREE.Vector3(),
-    tag: "Player"
+    name: "Player"
   };
+}
+
+/* ================= WAYPOINTS ================= */
+
+const waypoints = {};
+
+function createWaypoint(){
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.25,1.5,0.25),
+    new THREE.MeshStandardMaterial({
+      color: 0x00aaff,
+      fog: false
+    })
+  );
+
+  scene.add(mesh);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 128;
+
+  const ctx = canvas.getContext("2d");
+  const tex = new THREE.CanvasTexture(canvas);
+
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: false,
+      fog: false
+    })
+  );
+
+  sprite.scale.set(4,2,1);
+  scene.add(sprite);
+
+  return { mesh, sprite, ctx, tex, name: "" };
 }
 
 /* ================= NETWORK ================= */
@@ -205,26 +256,42 @@ ws.onmessage = (msg) => {
   }
 
   if (data.type === "state") {
-    const p = data.players;
 
-    for (const id in p) {
+    for (const id in data.players) {
       if (id === myId) continue;
 
-      if (!remote[id]) {
-        remote[id] = createRemote(id);
-      }
+      if (!remote[id]) remote[id] = createRemote();
 
-      remote[id].target.set(p[id].x, p[id].y, p[id].z);
-      remote[id].tag = p[id].name;
+      remote[id].target.set(
+        data.players[id].x,
+        data.players[id].y,
+        data.players[id].z
+      );
+
+      remote[id].name = data.players[id].name;
     }
 
-    // cleanup dead players
     for (const id in remote) {
-      if (!p[id]) {
+      if (!data.players[id]) {
         scene.remove(remote[id].mesh);
         scene.remove(remote[id].sprite);
         delete remote[id];
       }
+    }
+
+    for (const id in data.waypoints) {
+
+      if (!waypoints[id]) {
+        waypoints[id] = createWaypoint();
+      }
+
+      waypoints[id].mesh.position.set(
+        data.waypoints[id].x,
+        data.waypoints[id].y - 0.75,
+        data.waypoints[id].z
+      );
+
+      waypoints[id].name = data.waypoints[id].name;
     }
   }
 };
@@ -246,12 +313,13 @@ function send(){
 
 /* ================= LOOP ================= */
 
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
 
   world.step();
 
-  /* LOOK */
+  /* ================= LOOK ================= */
+
   const lookSpeed = 0.02;
 
   if (keys["arrowleft"]) yaw += lookSpeed;
@@ -262,11 +330,12 @@ function animate(){
   pitch = Math.max(-1.5, Math.min(1.5, pitch));
   camera.rotation.set(pitch, yaw, 0);
 
-  /* MOVE */
+  /* ================= MOVE ================= */
+
   const vel = playerBody.linvel();
 
-  const forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
-  const right = new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 
   let vx = 0, vz = 0;
 
@@ -281,39 +350,85 @@ function animate(){
     playerBody.setLinvel({ x: vel.x, y: 6, z: vel.z }, true);
   }
 
+  /* ================= CAMERA ================= */
+
   const pos = playerBody.translation();
   camera.position.set(pos.x, pos.y + 0.8, pos.z);
 
   send();
 
-  /* ================= NAMETAGS ================= */
+  /* ================= REMOTES ================= */
 
   for (const id in remote) {
     const p = remote[id];
 
     p.mesh.position.lerp(p.target, 0.25);
 
-    p.sprite.position.set(
+    const labelPos = new THREE.Vector3(
       p.mesh.position.x,
       p.mesh.position.y + 1.6,
       p.mesh.position.z
     );
 
-    const ctx = p.ctx;
-    ctx.clearRect(0,0,256,128);
+    p.sprite.position.copy(labelPos);
 
+    // face camera
+    p.sprite.quaternion.copy(camera.quaternion);
+
+    // fixed readable size
+    const dist = camera.position.distanceTo(p.mesh.position);
+    const scale = Math.max(2.5, dist * 0.12);
+    p.sprite.scale.set(scale, scale * 0.5, 1);
+
+    const ctx = p.ctx;
+    ctx.clearRect(0, 0, 256, 128);
     ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(20,20,216,70);
+    ctx.fillRect(20, 20, 216, 70);
 
     ctx.fillStyle = "white";
-    ctx.font = "bold 32px Arial";
+    ctx.font = "28px Arial";
     ctx.textAlign = "center";
-    ctx.fillText(p.tag || "Player", 128, 65);
+    ctx.fillText(p.name, 128, 65);
 
     p.tex.needsUpdate = true;
   }
 
-  renderer.render(scene,camera);
+  /* ================= WAYPOINTS ================= */
+
+  for (const id in waypoints) {
+    const w = waypoints[id];
+
+    const wpPos = new THREE.Vector3(
+      w.mesh.position.x,
+      w.mesh.position.y,
+      w.mesh.position.z
+    );
+
+    w.sprite.position.copy(wpPos);
+
+    // face camera so it’s always readable
+    w.sprite.quaternion.copy(camera.quaternion);
+
+    // NO SHRINKING BELOW THIS SIZE
+    const dist = camera.position.distanceTo(w.mesh.position);
+    const scale = Math.max(3, dist * 0.10);
+    w.sprite.scale.set(scale, scale * 0.5, 1);
+
+    const ctx = w.ctx;
+    ctx.clearRect(0, 0, 256, 128);
+
+    ctx.fillStyle = "rgba(0,120,255,0.6)";
+    ctx.fillRect(20, 20, 216, 70);
+
+    ctx.fillStyle = "white";
+    ctx.font = "bold 28px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(w.name || "Waypoint", 128, 65);
+
+    w.tex.needsUpdate = true;
+  }
+
+  renderer.render(scene, camera);
 }
 
 animate();
