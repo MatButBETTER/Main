@@ -40,6 +40,7 @@ const remotePlayers = {};
 /* ---------------- SCENE ---------------- */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9bb4c7);
+const name = prompt("Enter your name") || "Guest";
 
 /* 🌫️ FOG BACK */
 scene.fog = new THREE.Fog(0x9bb4c7, 5, 60);
@@ -218,6 +219,11 @@ function sendPosition() {
     z: t.z
   }));
 }
+
+ws.send(JSON.stringify({
+  type: "tag",
+  tag: playerTag
+}));
 
 /* ---------------- LOOP ---------------- */
 function animate() {
