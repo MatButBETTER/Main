@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Low Poly bk game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+
+    #crosshair {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 4px;
+      height: 4px;
+      background: white;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+<div id="crosshair"></div>
+
+<script type="module">
+
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165/build/three.module.js";
+import RAPIER from "https://cdn.skypack.dev/@dimforge/rapier3d-compat";
+
+/* ---------------- INIT PHYSICS ---------------- */
+
+await RAPIER.init();
+
+const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+
+/* ---------------- NETWORK ---------------- */
+
+const ws = new WebSocket("wss://rectal-ascent-grove.ngrok-free.dev");
+
+let myId = null;
+
+/* remote players (smooth targets) */
+const remotePlayers = {};
+
+/* ---------------- THREE SETUP ---------------- */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0.5, 0.7, 1);
+scene.fog = new THREE.Fog(0xaaaaaa, 5, 100);
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+
+camera.rotation.order = "YXZ";
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* ---------------- LIGHT ---------------- */
+
+scene.add(new THREE.DirectionalLight(0xffffff, 1).position.set(1,1,1));
+
+/* ---------------- INPUT ---------------- */
+
+const keys = {};
+window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+let yaw = 0;
+let pitch = 0;
+
+/* ---------------- PLAYER ---------------- */
+
+const playerBody = world.createRigidBody(
+  RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 2, 0)
+);
+
+world.createCollider(
+  RAPIER.ColliderDesc.capsule(0.5, 1.0),
+  playerBody
+);
+
+/* ---------------- WORLD (YOUR MAP EXACTLY) ---------------- */
+
+const meshes = [];
+
+function addBox(x, y, z, sx, sy, sz, color) {
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(sx * 2, sy * 2, sz * 2),
+    new THREE.MeshStandardMaterial({ color })
+  );
+
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  meshes.push(mesh);
+
+  const desc = RAPIER.ColliderDesc.cuboid(sx, sy, sz)
+    .setTranslation(x, y, z);
+
+  world.createCollider(desc);
+
+  return mesh;
+}
+
+/* LIGHT HELPER (your old style kept) */
+function addLight(type = "ambient", x, y, z) {
+  if (type === "ambient") {
+    const light = new THREE.AmbientLight(0xffffff, 1);
+    scene.add(light);
+    return light;
+  }
+}
+
+/* ---------------- YOUR WORLD (UNCHANGED) ---------------- */
+
+addBox(0, -1, 0, 100, 0.5, 100, 0x9e982b);
+
+const wallcolour = 0xede321;
+
+/* OUTER */
+addBox(100, 0, 0, 0.5, 4, 100, wallcolour);
+addBox(0, 0, 100, 100, 4, 0.5, wallcolour);
+addBox(-100, 0, 0, 0.5, 4, 100, wallcolour);
+addBox(0, 0, -100, 100, 4, 0.5, wallcolour);
+
+/* INNER WALLS */
+addBox(0, 0, -10, 10, 4, 0.5, wallcolour);
+addBox(0, 0, 10, 15, 4, 0.5, wallcolour);
+addBox(10, 0, 0, 0.5, 4, 10, wallcolour);
+addBox(-20, 0, 0, 5, 4, 0.5, wallcolour);
+addBox(-20, 0, 0, 0.5, 4, 5, wallcolour);
+addBox(10, 0, 15, 20, 4, 0.5, wallcolour);
+addBox(20, 0, 0, 0.5, 4, 10, wallcolour);
+addBox(0, 0, -18, 10, 4, 0.5, wallcolour);
+addBox(-15, 0, -10, 8, 4, 0.5, wallcolour);
+addBox(20, 0, -30, 20, 4, 0.5, wallcolour);
+addBox(20, 0, -30, 0.5, 4, 10, wallcolour);
+addBox(-20, 0, -30, 10, 4, 0.5, wallcolour);
+addBox(-20, 0, -30, 0.5, 4, 10, wallcolour);
+addBox(-25, 0, 30, 0.5, 4, 10, wallcolour);
+addBox(-25, 0, 40, 10, 4, 0.5, wallcolour);
+addBox(-40, 0, 30, 0.5, 4, 20, wallcolour);
+addBox(-40, 0, 30, 10, 4, 0.5, wallcolour);
+addBox(-20, 0, 20, 0.5, 4, 0.5, wallcolour);
+addBox(-40, 0, 0, 0.5, 4, 0.5, wallcolour);
+addBox(-45, 0, 0, 0.5, 4, 5, wallcolour);
+addBox(-45, 0, -15, 5, 4, 0.5, wallcolour);
+addBox(-45, 0, -20, 10, 4, 0.5, wallcolour);
+addBox(-58, 0, -10, 0.5, 4, 10, wallcolour);
+addBox(-58, 0, 15, 0.5, 4, 10, wallcolour);
+
+/* LIGHT */
+addLight("ambient", 0, 3.5, 0);
+
+/* ROOF */
+addBox(0, 4, 0, 100, 1, 100, 0x8f8f8f);
+
+/* ---------------- REMOTE PLAYERS ---------------- */
+
+function createRemotePlayer() {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 2, 1),
+    new THREE.MeshStandardMaterial({ color: 0xffcc00 })
+  );
+  scene.add(mesh);
+
+  return {
+    mesh,
+    target: new THREE.Vector3()
+  };
+}
+
+/* ---------------- NETWORK RECEIVE ---------------- */
+
+ws.onmessage = (msg) => {
+  const data = JSON.parse(msg.data);
+
+  if (data.type === "id") {
+    myId = data.id;
+  }
+
+  if (data.type === "state") {
+    const p = data.players;
+
+    for (const id in p) {
+
+      if (id === myId) continue;
+
+      if (!remotePlayers[id]) {
+        remotePlayers[id] = createRemotePlayer();
+      }
+
+      remotePlayers[id].target.set(
+        p[id].x,
+        p[id].y,
+        p[id].z
+      );
+    }
+  }
+};
+
+/* ---------------- SEND POSITION ---------------- */
+
+function sendPosition() {
+  if (ws.readyState !== 1) return;
+
+  const t = playerBody.translation();
+
+  ws.send(JSON.stringify({
+    type: "pos",
+    x: t.x,
+    y: t.y,
+    z: t.z
+  }));
+}
+
+/* ---------------- MOVEMENT ---------------- */
+
+const moveSpeed = 3;
+const jumpStrength = 6;
+
+/* ---------------- LOOP ---------------- */
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  world.step();
+
+  const pos = playerBody.translation();
+  const vel = playerBody.linvel();
+
+  /* LOOK */
+  const lookSpeed = 0.02;
+
+  if (keys["arrowleft"]) yaw += lookSpeed;
+  if (keys["arrowright"]) yaw -= lookSpeed;
+  if (keys["arrowup"]) pitch += lookSpeed;
+  if (keys["arrowdown"]) pitch -= lookSpeed;
+
+  pitch = Math.max(-1.5, Math.min(1.5, pitch));
+
+  camera.rotation.set(pitch, yaw, 0);
+
+  /* MOVE */
+  const forward = new THREE.Vector3(
+    Math.sin(yaw),
+    0,
+    Math.cos(yaw)
+  );
+
+  const right = new THREE.Vector3(
+    Math.cos(yaw),
+    0,
+    -Math.sin(yaw)
+  );
+
+  let vx = 0;
+  let vz = 0;
+
+  if (keys["w"]) {
+    vx -= forward.x * moveSpeed;
+    vz -= forward.z * moveSpeed;
+  }
+  if (keys["s"]) {
+    vx += forward.x * moveSpeed;
+    vz += forward.z * moveSpeed;
+  }
+  if (keys["a"]) {
+    vx -= right.x * moveSpeed;
+    vz -= right.z * moveSpeed;
+  }
+  if (keys["d"]) {
+    vx += right.x * moveSpeed;
+    vz += right.z * moveSpeed;
+  }
+
+  playerBody.setLinvel({ x: vx, y: vel.y, z: vz }, true);
+
+  if (keys[" "] && Math.abs(vel.y) < 0.05) {
+    playerBody.setLinvel(
+      { x: vel.x, y: jumpStrength, z: vel.z },
+      true
+    );
+  }
+
+  /* CAMERA FOLLOW (your original feel preserved) */
+  camera.position.set(pos.x, pos.y, pos.z);
+
+  /* SEND TO SERVER */
+  sendPosition();
+
+  /* SMOOTH REMOTE PLAYERS */
+  for (const id in remotePlayers) {
+    const p = remotePlayers[id];
+    p.mesh.position.lerp(p.target, 0.25);
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+
+</script>
+</body>
+</html>
