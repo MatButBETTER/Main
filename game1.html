@@ -161,7 +161,7 @@ function buildChunk(offX, offZ) {
   box(-40 + offX, 0, -40 + offZ, 0.5, 4, 8, wallcolour);
 }
 
-const RANGE = 10;
+const RANGE = 6;
 
 for (let x = -RANGE; x <= RANGE; x++) {
   for (let z = -RANGE; z <= RANGE; z++) {
@@ -169,7 +169,7 @@ for (let x = -RANGE; x <= RANGE; x++) {
   }
 }
 
-box(0,4,0,1000,1,1000,0x8f8f8f);
+box(0,4,0,800,1,800,0x8f8f8f);
 
 /* ================= REMOTES ================= */
 
@@ -321,7 +321,7 @@ function animate() {
 
   /* ================= LOOK ================= */
 
-  const lookSpeed = 0.02;
+  const lookSpeed = 0.03;
 
   if (keys["arrowleft"]) yaw += lookSpeed;
   if (keys["arrowright"]) yaw -= lookSpeed;
