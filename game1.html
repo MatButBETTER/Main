@@ -32,7 +32,7 @@ await RAPIER.init();
 /* ================= NETWORK ================= */
 
 const ws = new WebSocket("wss://rectal-ascent-grove.ngrok-free.dev");
-
+const speed = 3
 let myId = null;
 let myName = prompt("Enter your name") || "Player";
 
@@ -372,11 +372,11 @@ function animate() {
   const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
 
   let vx = 0, vz = 0;
-
-  if (keys["w"]) { vx -= forward.x * 2; vz -= forward.z * 2; }
-  if (keys["s"]) { vx += forward.x * 2; vz += forward.z * 2; }
-  if (keys["a"]) { vx -= right.x * 2; vz -= right.z * 2; }
-  if (keys["d"]) { vx += right.x * 2; vz += right.z * 2; }
+  
+  if (keys["w"]) { vx -= forward.x * speed; vz -= forward.z * speed; }
+  if (keys["s"]) { vx += forward.x * speed; vz += forward.z * speed; }
+  if (keys["a"]) { vx -= right.x * speed; vz -= right.z * speed; }
+  if (keys["d"]) { vx += right.x * speed; vz += right.z * speed; }
 
   playerBody.setLinvel({ x: vx, y: vel.y, z: vz }, true);
 
