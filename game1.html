@@ -76,7 +76,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87a8c4);
 scene.fog = new THREE.Fog(0xf6ff7d, 5, 120);
 
-const light = new THREE.DirectionalLight(0xffffff, 1);
+const light = new THREE.DirectionalLight(0xffffff, 3);
 light.position.set(10, 20, 10);
 scene.add(light);
 
@@ -108,7 +108,11 @@ world.createCollider(
 function box(x,y,z,sx,sy,sz,color){
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(sx*2, sy*2, sz*2),
-    new THREE.MeshStandardMaterial({ color })
+    new THREE.MeshStandardMaterial({ 
+      color,
+      metalness: 0.5,
+      roughness: 1
+    })
   );
 
   mesh.position.set(x,y,z);
