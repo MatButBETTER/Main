@@ -1,0 +1,17 @@
+{
+  "name": "mat-but-better",
+  "version": "1.0.0",
+  "description": "Mat But Better website",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1",
+    "ws": "^8.18.0"
+  }
+}
