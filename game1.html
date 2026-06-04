@@ -179,9 +179,22 @@ const remote = {};
 function createRemote(){
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1,2,1),
-    new THREE.MeshStandardMaterial({ color: 0xffcc00 })
+    new THREE.MeshStandardMaterial({ color: 0xf3ff08 })
   );
   scene.add(mesh);
+
+  // VISOR - visible on other players' heads
+  const visorGeo = new THREE.BoxGeometry(0.8, 0.6, 0.1);
+  const visorMat = new THREE.MeshStandardMaterial({ 
+    color: 0x000000,
+    metalness: 0.8,
+    roughness: 0.2,
+    emissive: 0x000000
+  });
+  const visor = new THREE.Mesh(visorGeo, visorMat);
+  visor.position.z = -0.55;
+  visor.position.y = 0.3;
+  mesh.add(visor);
 
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -203,11 +216,13 @@ function createRemote(){
 
   return {
     mesh,
+    visor,
     sprite,
     ctx,
     tex,
     target: new THREE.Vector3(),
-    name: "Player"
+    name: "Player",
+    yaw: 0
   };
 }
 
@@ -225,6 +240,17 @@ function createWaypoint(){
   );
 
   scene.add(mesh);
+  const faceMat = new THREE.MeshBasicMaterial({
+    color: 0x000000
+  });
+
+  const eyeGeo = new THREE.BoxGeometry(0.1, 0.1, 0.05);
+
+  const eye1 = new THREE.Mesh(eyeGeo, faceMat);
+
+  eye1.position.set(-0, 0.5, 0.5);
+
+  mesh.add(eye1);
 
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -271,6 +297,7 @@ ws.onmessage = (msg) => {
       );
 
       remote[id].name = data.players[id].name;
+      remote[id].yaw = data.players[id].yaw || 0;
     }
 
     for (const id in remote) {
@@ -309,7 +336,8 @@ function send(){
     type: "pos",
     x: t.x,
     y: t.y,
-    z: t.z
+    z: t.z,
+    yaw
   }));
 }
 
@@ -366,6 +394,8 @@ function animate() {
 
     p.mesh.position.lerp(p.target, 0.25);
 
+    p.mesh.rotation.y = p.yaw;
+
     const labelPos = new THREE.Vector3(
       p.mesh.position.x,
       p.mesh.position.y + 1.6,
@@ -374,10 +404,8 @@ function animate() {
 
     p.sprite.position.copy(labelPos);
 
-    // face camera
     p.sprite.quaternion.copy(camera.quaternion);
 
-    // fixed readable size
     const dist = camera.position.distanceTo(p.mesh.position);
     const scale = Math.max(2.5, dist * 0.12);
     p.sprite.scale.set(scale, scale * 0.5, 1);
@@ -408,10 +436,8 @@ function animate() {
 
     w.sprite.position.copy(wpPos);
 
-    // face camera so it’s always readable
     w.sprite.quaternion.copy(camera.quaternion);
 
-    // NO SHRINKING BELOW THIS SIZE
     const dist = camera.position.distanceTo(w.mesh.position);
     const scale = Math.max(3, dist * 0.10);
     w.sprite.scale.set(scale, scale * 0.5, 1);
